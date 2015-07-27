@@ -2,7 +2,7 @@
 ### SBT template
 # Simple Build Tool
 # http://www.scala-sbt.org/release/docs/Getting-Started/Directories.html#configuring-version-control
-
+data/
 target/
 lib_managed/
 src_managed/
@@ -80,3 +80,5 @@ project/plugins/project/
 .worksheet
 
 
+
+src/test/resources/application.default.properties

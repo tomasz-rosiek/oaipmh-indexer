@@ -14,7 +14,9 @@ libraryDependencies ++= {
     "io.spray" %%  "spray-client" % "1.3.1",
     "ch.qos.logback" % "logback-classic" % "1.0.7",
     "org.scala-lang.modules" %% "scala-xml" % "1.0.2",
-    "org.scalaz" %% "scalaz-core" % "7.1.3"
+    "org.scalaz" %% "scalaz-core" % "7.1.3",
+    "com.sksamuel.elastic4s" %% "elastic4s-core" % "1.6.6",
+    "com.sksamuel.elastic4s" %% "elastic4s-streams" % "1.6.6"
   )
 }
 

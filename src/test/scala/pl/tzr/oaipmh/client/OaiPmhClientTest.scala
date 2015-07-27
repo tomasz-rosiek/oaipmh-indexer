@@ -1,5 +1,6 @@
 package pl.tzr.oaipmh.client
 
+import com.typesafe.config.ConfigFactory
 import pl.tzr.oaimph.client.{MetadataSet, OaiPmhClient, Record, RecordPage}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -11,7 +12,10 @@ import scalaz._
 
 object OaiPmhClientTest extends App {
 
-  val oaiPmhClient = new OaiPmhClient("http://localhost:8080")
+  val config = ConfigFactory.load()
+  val repositoryUrl = config.getString("oaipmh.url")
+
+  val oaiPmhClient = new OaiPmhClient(repositoryUrl)
 
   val result: Future[String \/ List[Record]] = (for (
     sets: Seq[MetadataSet] <- eitherT(oaiPmhClient.listSets());

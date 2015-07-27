@@ -2,6 +2,7 @@ package pl.tzr.oaipmh.client
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.util.Timeout
+import com.typesafe.config.ConfigFactory
 import pl.tzr.oaimph.client.akka._
 
 import scala.concurrent.duration._
@@ -42,9 +43,13 @@ class OaiPmhHarvester extends Actor {
 
 object OaiPmhActorTest extends App {
 
+  val config = ConfigFactory.load()
+  val repositoryUrl = config.getString("oaipmh.url")
+  val setSpec = config.getString("oaipmh.set")
+
   implicit val system = ActorSystem()
   val ref = system.actorOf(Props[OaiPmhHarvester])
-  ref ! Harvest("", "")
+  ref ! Harvest(repositoryUrl, setSpec)
   system.awaitTermination()
 
 }

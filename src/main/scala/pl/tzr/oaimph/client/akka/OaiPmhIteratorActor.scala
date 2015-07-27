@@ -2,11 +2,12 @@ package pl.tzr.oaimph.client.akka
 
 import _root_.akka.actor.{Actor, ActorRef}
 import _root_.akka.event.Logging
+import _root_.akka.pattern.pipe
 import pl.tzr.oaimph.client._
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
-import scalaz.{-\/, \/-}
+import scala.concurrent.{Await, Future}
+import scalaz.{\/, -\/, \/-}
 
 case object NextRecordRequest
 case object CancelRequest
@@ -14,6 +15,8 @@ case class NextRecordResponse(record : Record)
 case object NoMoreRecordsResponse
 case class NextRecordFailureResponse(message : String)
 case object CancelResponse
+
+case class NextPage(sender : ActorRef, page : (String \/ RecordPage))
 
 class OaiPmhIteratorActor(serverUrl : String, setSpec : String) extends Actor {
 
@@ -29,9 +32,11 @@ class OaiPmhIteratorActor(serverUrl : String, setSpec : String) extends Actor {
    var lastToken : IterationState = FirstStep
    var lastResults : List[Record] = Nil
 
-   override def receive: Receive = {
+
+  override def receive: Receive = {
      case NextRecordRequest => next(sender())
      case CancelRequest => cancel(sender())
+     case NextPage(sender, x) => handleNextPage(sender, x)
      case _ => log.info("received unknown message")
    }
 
@@ -41,20 +46,23 @@ class OaiPmhIteratorActor(serverUrl : String, setSpec : String) extends Actor {
    }
 
    def askForNextPage(sender : ActorRef) = {
-     val iterationResult = lastToken match {
+     (lastToken match {
        case NextStep(token) => oaiPmhClient.iterateOverSet(token)
        case FirstStep => oaiPmhClient.iterateOverSet(setSpec)
        case LastStep => Future.successful(\/-(RecordPage(Nil, Option.empty)))
-     }
-     iterationResult.onSuccess {
-       case \/-(page: RecordPage) =>
-         lastResults = page.items
-         lastToken = page.resumptionToken.map(NextStep).getOrElse(LastStep)
-         if (lastResults.isEmpty) replyNoMoreRecords(sender) else sendNextResult(sender)
-       case -\/(message : String) =>
-         replyFailure(sender, message)
-     }
+     }).map(NextPage(sender, _)).pipeTo(self)
    }
+
+  def handleNextPage(sender : ActorRef, page: String \/ RecordPage) : Unit = {
+    page match {
+      case \/-(page) =>
+        lastResults = page.items
+        lastToken = page.resumptionToken.map(NextStep).getOrElse(LastStep)
+        if (lastResults.isEmpty) replyNoMoreRecords(sender) else sendNextResult(sender)
+      case -\/(message) =>
+        replyFailure(sender, message)
+    }
+  }
 
   def replyNoMoreRecords(sender: ActorRef) = {
     sender ! NoMoreRecordsResponse
