@@ -2,7 +2,7 @@ package pl.tzr.oaimph.client
 
 import java.io.{ByteArrayInputStream, InputStreamReader}
 
-import akka.actor.ActorSystem
+import _root_.akka.actor.ActorSystem
 import pl.tzr.oaipmh.generated._
 import spray.client.pipelining._
 import spray.http.MediaTypes._
@@ -12,7 +12,8 @@ import spray.httpx.unmarshalling.Unmarshaller
 
 import scala.concurrent.Future
 import scala.xml.{Elem, XML}
-import scalaz.OptionT._
+
+import scalaz._
 import scalaz.Scalaz._
 
 class OaiPmhClient(baseUrl : String) {
@@ -20,7 +21,7 @@ class OaiPmhClient(baseUrl : String) {
   implicit val system = ActorSystem() // execution context for futures
 
   implicit val NodeSeqUnmarshaller =
-    Unmarshaller[Option[OAIu45PMHtype]](`text/xml`, `application/xml`, `application/xhtml+xml`) {
+    Unmarshaller[OAIu45PMHtype](`text/xml`, `application/xml`, `application/xhtml+xml`) {
       case HttpEntity.NonEmpty(contentType, data) =>
 
         val parser = XML.parser
@@ -30,45 +31,49 @@ class OaiPmhClient(baseUrl : String) {
           case e: org.xml.sax.SAXNotRecognizedException ⇒ // property is not needed
         }
         val elem = XML.withSAXParser(parser).load(new InputStreamReader(new ByteArrayInputStream(data.toByteArray), contentType.charset.nioCharset))
-        Some(scalaxb.fromXML[OAIu45PMHtype](elem))
-      case HttpEntity.Empty =>
-        Option.empty[OAIu45PMHtype]
+        scalaxb.fromXML[OAIu45PMHtype](elem)
     }
 
-  val pipeline: HttpRequest => Future[Option[OAIu45PMHtype]] = sendReceive ~> unmarshal[Option[OAIu45PMHtype]]
+  val pipeline: HttpRequest => Future[OAIu45PMHtype] = sendReceive ~> unmarshal[OAIu45PMHtype]
 
-  def identify(): Future[Option[OAIu45PMHtype]] =
-    performOperation(Query("verb" -> "Identify"), x => x)
+  def identify(): Future[String \/ OAIu45PMHtype] =
+    performOperation(Query("verb" -> "Identify"), x => \/-(x))
 
-  def listSets(): Future[Option[Seq[MetadataSet]]] =
+  def listSets(): Future[String \/ Seq[MetadataSet]] =
     performOperation(Query("verb" -> "ListSets"), parseListSetsResponse)
 
-  def iterateOverSet(setSpec : String): Future[Option[RecordPage]] =
-    performOperation(Query("verb" -> "ListRecords", "set" -> setSpec, "metadataPrefix" -> "oai_dc"), parseSetResponse(_).get)
+  def iterateOverSet(setSpec : String): Future[String \/ RecordPage] =
+    performOperation(Query("verb" -> "ListRecords", "set" -> setSpec, "metadataPrefix" -> "oai_dc"), parseSetResponse)
 
-  def iterateOverSet(resumptionToken : ResumptionToken):Future[Option[RecordPage]] =
-    performOperation(Query("verb" -> "ListRecords", "resumptionToken" -> resumptionToken.value), parseSetResponse(_).get)
+  def iterateOverSet(resumptionToken : ResumptionToken):Future[String \/ RecordPage] =
+    performOperation(Query("verb" -> "ListRecords", "resumptionToken" -> resumptionToken.value), parseSetResponse)
 
   private def parseSetDetails(content : SetType) : MetadataSet = MetadataSet(content.setSpec, content.setName)
 
-  private def parseListSetsResponse(response : OAIu45PMHtype) : Seq[MetadataSet] = {
-    for (
-      response <- extractResultByType[ListSetsType](response);
-      set <- response.set
-    ) yield { parseSetDetails(set) }
+  private def parseListSetsResponse(response : OAIu45PMHtype) : String \/ Seq[MetadataSet] = {
+    extractResultByType[ListSetsType](response).map(_.head.set.map(parseSetDetails))
   }
 
-  private def performOperation[R](query : Query, resultHandler : (OAIu45PMHtype => R)): Future[Option[R]] =
-    optionT(pipeline(Get(Uri(baseUrl).copy(query = query)))).map(resultHandler(_)).run
+  private def performOperation[R](query : Query, resultHandler : (OAIu45PMHtype => String \/ R)): Future[String \/ R] =
+    pipeline(Get(Uri(baseUrl).copy(query = query))).map(resultHandler)
 
-  private def extractResultByType[T](response : OAIu45PMHtype): Seq[T] = {
-    response.oaiu45pmhtypeoption.map(_.value.asInstanceOf[T])
+
+  private def extractResultByType[T](response : OAIu45PMHtype): String \/ List[T] = {
+    val result: List[String \/ T] = response.oaiu45pmhtypeoption.map(_.value).toList.collect {
+      case error: OAIu45PMHerrorType => -\/(error.toString)
+      case x if x.isInstanceOf[T] => \/-(x.asInstanceOf[T])
+      case unknown => -\/(s"Unknown content $unknown")
+    }
+    result.partition(_.isLeft) match {
+      case (Nil,  list) => \/-(for (\/-(x) <- list) yield x)
+      case (errors, _) => -\/((for (-\/(x) <- errors) yield x).mkString(","))
+    }
   }
 
-  private def parseSetResponse(response: OAIu45PMHtype): Option[RecordPage] = {
-    for (page <- extractResultByType[ListRecordsType](response).headOption) yield {
-      val resumptionToken = page.resumptionToken.map(token => ResumptionToken(token.value))
-      val records = page.record.toList.map(buildRecord)
+  private def parseSetResponse(response: OAIu45PMHtype): String \/ RecordPage = {
+    for (page <- extractResultByType[ListRecordsType](response)) yield {
+      val resumptionToken = page.head.resumptionToken.filter(!_.value.isEmpty).map(token => ResumptionToken(token.value))
+      val records = page.head.record.toList.map(buildRecord)
       RecordPage(records, resumptionToken)
     }
   }

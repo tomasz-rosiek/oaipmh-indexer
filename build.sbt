@@ -10,6 +10,7 @@ libraryDependencies ++= {
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
+    "com.typesafe.akka" %% "akka-stream-experimental" % "1.0",
     "io.spray" %%  "spray-client" % "1.3.1",
     "ch.qos.logback" % "logback-classic" % "1.0.7",
     "org.scala-lang.modules" %% "scala-xml" % "1.0.2",
