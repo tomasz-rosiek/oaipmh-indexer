@@ -1,22 +1,20 @@
-package pl.tzr.oaimph.client.akka
+package pl.tzr.oaimph.client.actors
 
 import akka.actor.{ActorRef, Props}
 import akka.stream.actor.ActorPublisher
 import akka.stream.actor.ActorPublisherMessage.{Cancel, Request}
-import akka.util.Timeout
 import pl.tzr.oaimph.client.Record
-import scala.concurrent.duration._
+import pl.tzr.oaimph.client.actors.OaiPmhActor.{ListRecordsResponse, ListRecordsRequest}
+import pl.tzr.oaimph.client.actors.OaiPmhIteratorActor._
 
-class OaiPmhStreamActor(url : String, setSpec : String) extends ActorPublisher[Record] {
+class OaiPmhStreamActor(url: String, setSpec: String) extends ActorPublisher[Record] {
 
-  implicit val timeout = Timeout(5 seconds)
-
-  var oaiPmhClient: ActorRef = context.actorOf(Props(new OaiPmhActor(url)))
-  oaiPmhClient ! ListRecordsRequest(setSpec)
-
-  var iteratorClient : ActorRef = null
-
+  var iteratorClient: ActorRef = null
   var ongoingRequest = false
+
+  val oaiPmhClient: ActorRef = context.actorOf(Props(new OaiPmhActor(url)))
+
+  oaiPmhClient ! ListRecordsRequest(setSpec)
 
   override def receive: Receive = {
     case Request(elements) =>
@@ -31,7 +29,9 @@ class OaiPmhStreamActor(url : String, setSpec : String) extends ActorPublisher[R
       onNext(record)
       requestNewRecord()
     case NoMoreRecordsResponse =>
-      onComplete()
+      onCompleteThenStop()
+    case NextRecordFailureResponse(cause) =>
+      onErrorThenStop(new Exception(cause))
   }
 
   private def requestNewRecord(): Unit = {

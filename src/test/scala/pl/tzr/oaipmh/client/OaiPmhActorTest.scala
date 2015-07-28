@@ -3,7 +3,9 @@ package pl.tzr.oaipmh.client
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
-import pl.tzr.oaimph.client.akka._
+import pl.tzr.oaimph.client.actors.OaiPmhActor.{ListRecordsRequest, ListRecordsResponse}
+import pl.tzr.oaimph.client.actors.OaiPmhIteratorActor.{NoMoreRecordsResponse, NextRecordRequest, NextRecordResponse}
+import pl.tzr.oaimph.client.actors._
 
 import scala.concurrent.duration._
 

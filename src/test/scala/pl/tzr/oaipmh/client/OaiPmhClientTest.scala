@@ -1,5 +1,6 @@
 package pl.tzr.oaipmh.client
 
+import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
 import pl.tzr.oaimph.client.{MetadataSet, OaiPmhClient, Record, RecordPage}
 
@@ -12,9 +13,10 @@ import scalaz._
 
 object OaiPmhClientTest extends App {
 
+  implicit val system: ActorSystem = ActorSystem()
+
   val config = ConfigFactory.load()
   val repositoryUrl = config.getString("oaipmh.url")
-
   val oaiPmhClient = new OaiPmhClient(repositoryUrl)
 
   val result: Future[String \/ List[Record]] = (for (
@@ -26,4 +28,5 @@ object OaiPmhClientTest extends App {
 
   println(Await.result(result, 30 seconds))
 
+  system.shutdown()
 }

@@ -16,9 +16,8 @@ import scala.xml.{Elem, XML}
 import scalaz._
 import scalaz.Scalaz._
 
-class OaiPmhClient(baseUrl : String) {
+class OaiPmhClient(baseUrl : String)(implicit val system : ActorSystem) {
 
-  implicit val system = ActorSystem() // execution context for futures
 
   implicit val NodeSeqUnmarshaller =
     Unmarshaller[OAIu45PMHtype](`text/xml`, `application/xml`, `application/xhtml+xml`) {
@@ -55,7 +54,7 @@ class OaiPmhClient(baseUrl : String) {
   }
 
   private def performOperation[R](query : Query, resultHandler : (OAIu45PMHtype => String \/ R)): Future[String \/ R] =
-    pipeline(Get(Uri(baseUrl).copy(query = query))).map(resultHandler)
+    pipeline(Get(Uri(baseUrl).copy(query = query))).map(resultHandler).recover{case e : Exception => -\/(e.getMessage)}
 
 
   private def extractResultByType[T](response : OAIu45PMHtype): String \/ List[T] = {
@@ -73,16 +72,20 @@ class OaiPmhClient(baseUrl : String) {
   private def parseSetResponse(response: OAIu45PMHtype): String \/ RecordPage = {
     for (page <- extractResultByType[ListRecordsType](response)) yield {
       val resumptionToken = page.head.resumptionToken.filter(!_.value.isEmpty).map(token => ResumptionToken(token.value))
-      val records = page.head.record.toList.map(buildRecord)
+      val records = page.head.record.toList.flatMap(buildRecord)
       RecordPage(records, resumptionToken)
     }
   }
 
-  private def buildRecord(recordType: RecordType) : Record = {
-    val record = scalaxb.fromXML[Oai_dcType](recordType.metadata.get.any.as[Elem])
-    val attributes = record.oai_dctypeoption.map(r => r.key.get -> r.value.asInstanceOf[ElementType].value)
-    val attributeMap = attributes.groupBy(_._1).mapValues(_.map(_._2).toList)
-    Record(recordType.header.identifier, attributeMap)
+  private def buildRecord(recordType: RecordType) : Option[Record] = {
+    //TODO handle empty records
+
+    for (recordContent <- recordType.metadata) yield {
+      val record = scalaxb.fromXML[Oai_dcType](recordContent.any.as[Elem])
+      val attributes = record.oai_dctypeoption.map(r => r.key.get -> r.value.asInstanceOf[ElementType].value)
+      val attributeMap = attributes.groupBy(_._1).mapValues(_.map(_._2).toList)
+      Record(recordType.header.identifier, attributeMap)
+    }
   }
 
 }
