@@ -1,6 +1,6 @@
 package pl.tzr.oaimph.client.actors
 
-import _root_.akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{ActorLogging, Actor, ActorRef, Props}
 import _root_.akka.event.Logging
 import pl.tzr.oaimph.client._
 import pl.tzr.oaimph.client.actors.OaiPmhActor._
@@ -18,11 +18,9 @@ object OaiPmhActor {
 
 }
 
-class OaiPmhActor(serverUrl: String) extends Actor {
+class OaiPmhActor(serverUrl: String) extends Actor with ActorLogging {
 
   implicit val actorSystem = context.system
-
-  val log = Logging(context.system, this)
 
   val oaiPmhClient = new OaiPmhClient(serverUrl)
 

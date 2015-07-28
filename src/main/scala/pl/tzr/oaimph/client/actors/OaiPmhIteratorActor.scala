@@ -1,7 +1,7 @@
 package pl.tzr.oaimph.client.actors
 
 import akka.actor.Status.Failure
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{ActorLogging, Actor, ActorRef}
 import akka.event.Logging
 import akka.pattern.pipe
 import pl.tzr.oaimph.client._
@@ -29,14 +29,11 @@ object OaiPmhIteratorActor {
 
 }
 
-class OaiPmhIteratorActor(serverUrl: String, setSpec: String) extends Actor {
-
+class OaiPmhIteratorActor(serverUrl: String, setSpec: String) extends Actor with ActorLogging {
 
   implicit val actorSystem = context.system
 
   val oaiPmhClient = new OaiPmhClient(serverUrl)
-
-  val log = Logging(context.system, this)
 
   var lastToken: IterationState = FirstStep
   var lastResults: List[Record] = Nil
